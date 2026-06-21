@@ -13,9 +13,7 @@ interface DifficultyConfig {
 
 // Difficulty configurations
 const DIFFICULTIES: Record<string, DifficultyConfig> = {
-  EASY: { id: 'easy', label: 'Easy', grid: 3 },
-  MEDIUM: { id: 'medium', label: 'Medium', grid: 4 },
-  HARD: { id: 'hard', label: 'Hard', grid: 5 }
+  EASY: { id: 'easy', label: 'Easy', grid: 3 }
 };
 
 // Mock leaderboard data to mix with local storage
@@ -23,8 +21,6 @@ const MOCK_LEADERBOARD = [
   { id: '1', playerName: 'ALAN', completionTime: 4, difficulty: 'easy', date: new Date().toISOString() },
   { id: '2', playerName: 'RLE_RAPHA', completionTime: 5, difficulty: 'easy', date: new Date().toISOString() },
   { id: '3', playerName: 'LUCAS', completionTime: 7, difficulty: 'easy', date: new Date().toISOString() },
-  { id: '4', playerName: 'EMMA', completionTime: 12, difficulty: 'medium', date: new Date().toISOString() },
-  { id: '5', playerName: 'SOPHIA', completionTime: 15, difficulty: 'hard', date: new Date().toISOString() },
 ];
 
 const formatTime = (seconds: number) => {
@@ -321,8 +317,8 @@ export default function App() {
       cropBoxRef.current = { x: cropX, y: cropY, width: cropW, height: cropH };
     }
 
-    // Draw HUD overlays during capture phase
-    if (currentPhase === 'capture' && canvasRef.current) {
+    // Draw HUD overlays during capture phase and hand skeleton during both capture/solve phases
+    if ((currentPhase === 'capture' || currentPhase === 'solve') && canvasRef.current) {
       const canvasCtx = canvasRef.current.getContext('2d');
       if (canvasCtx) {
         const width = canvasRef.current.width;
@@ -333,41 +329,50 @@ export default function App() {
         // Draw MediaPipe tracked landmarks
         if (results.multiHandLandmarks && (window as any).drawConnectors && (window as any).drawLandmarks) {
           for (const landmarks of results.multiHandLandmarks) {
-            (window as any).drawConnectors(canvasCtx, landmarks, (window as any).HAND_CONNECTIONS, { color: 'rgba(255, 255, 255, 0.45)', lineWidth: 1.5 });
-            (window as any).drawLandmarks(canvasCtx, landmarks, { color: '#10B981', lineWidth: 1, radius: 2.5 });
+            (window as any).drawConnectors(canvasCtx, landmarks, (window as any).HAND_CONNECTIONS, { 
+              color: currentPhase === 'solve' ? '#10B981' : 'rgba(255, 255, 255, 0.45)', 
+              lineWidth: currentPhase === 'solve' ? 3 : 1.5 
+            });
+            (window as any).drawLandmarks(canvasCtx, landmarks, { 
+              color: currentPhase === 'solve' ? '#D7FF2F' : '#10B981', 
+              lineWidth: currentPhase === 'solve' ? 2 : 1, 
+              radius: currentPhase === 'solve' ? 4 : 2.5 
+            });
           }
         }
 
-        // Draw tracked crop box
-        const crop = cropBoxRef.current;
-        const boxX = crop.x * width;
-        const boxY = crop.y * height;
-        const boxW = crop.width * width;
-        const boxH = crop.height * height;
+        // Draw tracked crop box and scanner ONLY in capture phase
+        if (currentPhase === 'capture') {
+          const crop = cropBoxRef.current;
+          const boxX = crop.x * width;
+          const boxY = crop.y * height;
+          const boxW = crop.width * width;
+          const boxH = crop.height * height;
 
-        // Glowing boundary box
-        canvasCtx.strokeStyle = '#D7FF2F';
-        canvasCtx.lineWidth = 3;
-        canvasCtx.shadowColor = '#D7FF2F';
-        canvasCtx.shadowBlur = 12;
-        canvasCtx.strokeRect(boxX, boxY, boxW, boxH);
+          // Glowing boundary box
+          canvasCtx.strokeStyle = '#D7FF2F';
+          canvasCtx.lineWidth = 3;
+          canvasCtx.shadowColor = '#D7FF2F';
+          canvasCtx.shadowBlur = 12;
+          canvasCtx.strokeRect(boxX, boxY, boxW, boxH);
 
-        // Sweeping cyan scanning laser line
-        const scanTime = (Date.now() % 2000) / 2000;
-        const laserY = boxY + boxH * scanTime;
-        canvasCtx.strokeStyle = '#00f0ff';
-        canvasCtx.shadowColor = '#00f0ff';
-        canvasCtx.lineWidth = 2;
-        canvasCtx.beginPath();
-        canvasCtx.moveTo(boxX, laserY);
-        canvasCtx.lineTo(boxX + boxW, laserY);
-        canvasCtx.stroke();
+          // Sweeping cyan scanning laser line
+          const scanTime = (Date.now() % 2000) / 2000;
+          const laserY = boxY + boxH * scanTime;
+          canvasCtx.strokeStyle = '#00f0ff';
+          canvasCtx.shadowColor = '#00f0ff';
+          canvasCtx.lineWidth = 2;
+          canvasCtx.beginPath();
+          canvasCtx.moveTo(boxX, laserY);
+          canvasCtx.lineTo(boxX + boxW, laserY);
+          canvasCtx.stroke();
 
-        // Label indicators
-        canvasCtx.fillStyle = '#D7FF2F';
-        canvasCtx.font = 'bold 14px monospace';
-        canvasCtx.shadowBlur = 4;
-        canvasCtx.fillText('PINCH TO CAPTURE', boxX, boxY - 10);
+          // Label indicators
+          canvasCtx.fillStyle = '#D7FF2F';
+          canvasCtx.font = 'bold 14px monospace';
+          canvasCtx.shadowBlur = 4;
+          canvasCtx.fillText('PINCH TO CAPTURE', boxX, boxY - 10);
+        }
 
         canvasCtx.restore();
       }
@@ -1068,7 +1073,7 @@ export default function App() {
         </div>
 
         {/* Video / Canvas Container */}
-        <div className="relative w-full max-w-5xl aspect-video rounded-2xl overflow-hidden border border-zinc-800 shadow-[0_0_50px_rgba(0,0,0,0.5)] bg-zinc-900 flex items-center justify-center">
+        <div className="absolute inset-0 w-full h-full bg-zinc-950 flex items-center justify-center overflow-hidden">
           
           {!isReady && (phase === 'capture' || phase === 'solve') && (
             <div className="absolute inset-0 flex items-center justify-center bg-zinc-950 z-20">
@@ -1078,12 +1083,12 @@ export default function App() {
 
           <video 
             ref={videoRef} 
-            className={`w-full h-full object-cover transform scale-x-[-1] ${phase === 'capture' ? 'opacity-100' : 'opacity-0 absolute inset-0'}`} 
+            className={`w-full h-full object-cover transform scale-x-[-1] ${phase === 'capture' || phase === 'solve' ? 'opacity-100' : 'opacity-0 absolute inset-0'}`} 
             playsInline autoPlay muted 
           />
           
-          {phase === 'capture' && (
-            <canvas ref={canvasRef} className="absolute inset-0 w-full h-full transform scale-x-[-1] pointer-events-none z-10" />
+          {(phase === 'capture' || phase === 'solve') && (
+            <canvas ref={canvasRef} className="absolute inset-0 w-full h-full object-cover transform scale-x-[-1] pointer-events-none z-30" />
           )}
 
           {phase === 'capture' && (
@@ -1115,7 +1120,7 @@ export default function App() {
 
           {/* Puzzle Grid Area (Phase 2) */}
           {phase === 'solve' && pieces.length > 0 && (
-            <div className="absolute inset-0 z-10 bg-zinc-950 flex items-center justify-center p-8">
+            <div className="absolute inset-0 z-10 bg-transparent flex items-center justify-center p-8">
               <div 
                 ref={gridContainerRef}
                 className="relative border-2 border-zinc-800 bg-zinc-900 overflow-hidden shadow-2xl"

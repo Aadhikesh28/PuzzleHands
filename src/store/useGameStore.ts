@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
 export type GamePhase = 'idle' | 'capture' | 'solve' | 'leaderboard';
-export type Difficulty = 'easy' | 'medium' | 'hard' | 'insane';
+export type Difficulty = 'easy' | 'insane';
 
 export interface PuzzlePiece {
   id: number;
@@ -61,8 +61,6 @@ interface GameState {
 const getGridSize = (diff: Difficulty) => {
   switch (diff) {
     case 'easy': return 3;
-    case 'medium': return 4;
-    case 'hard': return 5;
     case 'insane': return 6;
     default: return 3;
   }
@@ -154,7 +152,7 @@ export const useGameStore = create<GameState>()(
         const { timer, difficulty } = get();
         const baseScore = 10000;
         const timePenalty = timer * 50;
-        const difficultyMultiplier = { easy: 1, medium: 1.5, hard: 2, insane: 3 }[difficulty];
+        const difficultyMultiplier = { easy: 1, insane: 3 }[difficulty];
         const finalScore = Math.max(0, Math.round((baseScore - timePenalty) * difficultyMultiplier));
         set({ score: finalScore });
         return finalScore;

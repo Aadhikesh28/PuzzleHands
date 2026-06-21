@@ -670,13 +670,11 @@ export const GameContainer: React.FC = () => {
                 <label className="text-[10px] text-gray-500 font-bold tracking-widest uppercase">
                   02 // DECRYPTION DIFFICULTY
                 </label>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                  {(['easy', 'medium', 'hard', 'insane'] as const).map((diff) => {
+                <div className="grid grid-cols-2 md:grid-cols-2 gap-2">
+                  {(['easy', 'insane'] as const).map((diff) => {
                     const active = difficulty === diff;
                     const details = {
                       easy: { grid: '3x3', mult: '1.0x' },
-                      medium: { grid: '4x4', mult: '1.5x' },
-                      hard: { grid: '5x5', mult: '2.0x' },
                       insane: { grid: '6x6', mult: '3.0x' },
                     }[diff];
 
@@ -925,7 +923,7 @@ export const GameContainer: React.FC = () => {
                       {score}
                     </span>
                     <span className="text-xs text-gray-500 font-bold">
-                      x{{ easy: 1, medium: 1.5, hard: 2, insane: 3 }[difficulty]}
+                      x{{ easy: 1, insane: 3 }[difficulty]}
                     </span>
                   </div>
                 </div>

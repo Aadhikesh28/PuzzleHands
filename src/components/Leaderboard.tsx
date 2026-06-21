@@ -38,7 +38,7 @@ export const Leaderboard: React.FC = () => {
 
       {/* Difficulty Filter Tabs */}
       <div className="flex flex-wrap gap-2 justify-center mb-6 w-full max-w-2xl bg-white/5 p-1.5 rounded-full border border-white/10">
-        {(['all', 'easy', 'medium', 'hard', 'insane'] as const).map((diff) => (
+        {(['all', 'easy', 'insane'] as const).map((diff) => (
           <button
             key={diff}
             onClick={() => {
@@ -132,9 +132,8 @@ export const Leaderboard: React.FC = () => {
                   <div className="col-span-2 text-center text-xs">
                     <span className={`px-2 py-0.5 rounded text-[9px] font-bold border uppercase ${
                       entry.difficulty === 'easy' ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' :
-                      entry.difficulty === 'medium' ? 'bg-cyan-500/10 border-cyan-500/30 text-cyan-400' :
-                      entry.difficulty === 'hard' ? 'bg-orange-500/10 border-orange-500/30 text-orange-400' :
-                      'bg-red-500/10 border-red-500/30 text-red-400'
+                      entry.difficulty === 'insane' ? 'bg-red-500/10 border-red-500/30 text-red-400' :
+                      'bg-zinc-500/10 border-zinc-500/30 text-zinc-400'
                     }`}>
                       {entry.difficulty}
                     </span>
