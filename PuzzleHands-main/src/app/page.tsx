@@ -18,6 +18,32 @@ const DIFFICULTIES: Record<string, DifficultyConfig> = {
   HARD: { id: 'hard', label: 'Hard', grid: 5 }
 };
 
+const PUZZLE_IMAGES = [
+  {
+    name: 'Mountain',
+    emoji: '🌄',
+    src: '/puzzles/mountain.jpg',
+  },
+  {
+    name: 'Cat',
+    emoji: '🐱',
+    src: '/puzzles/cat.jpg',
+  },
+  {
+    name: 'Car',
+    emoji: '🚗',
+    src: '/puzzles/car.jpg',
+  },
+  {
+    name: 'Space',
+    emoji: '🌌',
+    src: '/puzzles/space.jpg',
+  },
+
+  { name: 'Avengers', emoji: '🦸', src: '/puzzles/avengers.jpg' },
+  
+];
+
 const SCORE_MULTIPLIERS: Record<string, number> = {
   easy: 1,
   moderate: 1.5,
@@ -43,8 +69,60 @@ export default function App() {
   const [mpError, setMpError] = useState<any>(null);
   
   // Game State
-  const [phase, setPhase] = useState('menu'); // menu, capture, solve, leaderboard
-  const [difficulty, setDifficulty] = useState<DifficultyConfig>(DIFFICULTIES.EASY);
+  const [phase, setPhase] = useState('menu'); // menu, source, images, capture, solve, leaderboard
+  const [selectedPuzzleImage, setSelectedPuzzleImage] = useState<string | null>(null);
+  const [nextGridSize, setNextGridSize] = useState<number | null>(null);
+  const [undoStack, setUndoStack] = useState<any[][]>([]);
+  const [redoStack, setRedoStack] = useState<any[][]>([]);
+
+  const saveToUndo = (currentPieces: any[]) => {
+  setUndoStack(prev => [
+    ...prev,
+    currentPieces.map(piece => ({ ...piece }))
+  ]);
+  setRedoStack([]);
+};
+
+ const handleUndo = () => {
+  if (undoStack.length === 0) return;
+
+  const previousState = undoStack[undoStack.length - 1];
+
+  setRedoStack(prev => [
+    ...prev,
+    pieces.map(piece => ({ ...piece }))
+  ]);
+
+  setUndoStack(prev => prev.slice(0, -1));
+
+  setPieces(previousState.map(piece => ({ ...piece })));
+  piecesRef.current = previousState.map(piece => ({ ...piece }));
+
+  setMoves(prev => Math.max(0, prev - 1));
+  playClickSound();
+};
+
+  const handleRedo = () => {
+  if (redoStack.length === 0) return;
+
+  const nextState = redoStack[redoStack.length - 1];
+
+  setUndoStack(prev => [
+    ...prev,
+    pieces.map(piece => ({ ...piece }))
+  ]);
+
+  setRedoStack(prev => prev.slice(0, -1));
+
+  setPieces(nextState.map(piece => ({ ...piece })));
+  piecesRef.current = nextState.map(piece => ({ ...piece }));
+
+  setMoves(prev => prev + 1);
+  playClickSound();
+};
+
+
+  const [difficulty, setDifficulty] = useState<DifficultyConfig>(DIFFICULTIES.EASY); 
   const [timer, setTimer] = useState(0);
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   const [leaderboard, setLeaderboard] = useState<any[]>([]);
@@ -53,14 +131,62 @@ export default function App() {
   const [hintedPieceId, setHintedPieceId] = useState<number | null>(null);
   const [hintsUsed, setHintsUsed] = useState(0);
   const [score, setScore] = useState(0);
+  const [gameStats, setGameStats] = useState<
+  {
+    score: number;
+    time: number;
+    moves: number;
+    hints: number;
+    difficulty: string;
+    date: string;
+  }[]
+>([]);
+
+  useEffect(() => {
+  const savedStats = localStorage.getItem('puzzleHandsStats');
+
+  if (savedStats) {
+    setGameStats(JSON.parse(savedStats));
+  }
+}, []);
+
+useEffect(() => {
+  localStorage.setItem('puzzleHandsStats', JSON.stringify(gameStats));
+}, [gameStats]);
+
+
+  const [completedImage, setCompletedImage] = useState<string | null>(null);
   const [moves, setMoves] = useState(0);
   const [mascotEmoji, setMascotEmoji] = useState('😀');
+  const [musicEnabled, setMusicEnabled] = useState(false);
+  const musicRef = useRef<HTMLAudioElement | null>(null);
   const [mascotMessage, setMascotMessage] = useState("Let's solve this!");
   const [floatingReactions, setFloatingReactions] = useState<
   { id: number; emoji: string; left: number }[]
 >([]);
 
 const floatingReactionIdRef = useRef(0);
+
+useEffect(() => {
+  musicRef.current = new Audio('/music/background.mp3');
+  musicRef.current.loop = true;
+  musicRef.current.volume = 0.25;
+
+  return () => {
+    musicRef.current?.pause();
+    musicRef.current = null;
+  };
+}, []);
+
+useEffect(() => {
+  if (!musicRef.current) return;
+
+  if (musicEnabled) {
+    musicRef.current.play().catch(() => {});
+  } else {
+    musicRef.current.pause();
+  }
+}, [musicEnabled]);
   
   // Puzzle State
   const [pieces, setPieces] = useState<any[]>([]);
@@ -218,7 +344,7 @@ const floatingReactionIdRef = useRef(0);
 
   // Crops and generates puzzle pieces from the rectangular box area
   const generatePuzzle = (videoEl: HTMLVideoElement) => {
-    const grid = difficulty.grid;
+    const grid = nextGridSize ?? difficulty.grid;
     
     // Video dimensions
     const videoW = videoEl.videoWidth || 640;
@@ -295,6 +421,88 @@ const floatingReactionIdRef = useRef(0);
     setIsTimerRunning(true);
   };
 
+    const generatePuzzleFromImage = (imageSrc: string) => {
+    const grid = nextGridSize ?? difficulty.grid;
+
+    const img = new Image();
+
+    img.onload = () => {
+      const imageW = img.naturalWidth;
+      const imageH = img.naturalHeight;
+
+      const aspect = imageW / imageH;
+      setPuzzleAspectRatio(aspect || 16 / 9);
+
+      const canvas = document.createElement('canvas');
+      canvas.width = imageW;
+      canvas.height = imageH;
+
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      ctx.drawImage(img, 0, 0, imageW, imageH);
+
+      const pieceWidth = imageW / grid;
+      const pieceHeight = imageH / grid;
+
+      const newPieces = [];
+
+      for (let y = 0; y < grid; y++) {
+        for (let x = 0; x < grid; x++) {
+          const pCanvas = document.createElement('canvas');
+
+          pCanvas.width = pieceWidth;
+          pCanvas.height = pieceHeight;
+
+          const pCtx = pCanvas.getContext('2d');
+
+          if (pCtx) {
+            pCtx.drawImage(
+              canvas,
+              x * pieceWidth,
+              y * pieceHeight,
+              pieceWidth,
+              pieceHeight,
+              0,
+              0,
+              pieceWidth,
+              pieceHeight
+            );
+          }
+
+          const id = y * grid + x;
+
+          newPieces.push({
+            id,
+            originalIdx: id,
+            currentIdx: id,
+            imgUrl: pCanvas.toDataURL('image/jpeg', 0.8),
+          });
+        }
+      }
+
+      let shuffled = [...newPieces];
+
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+
+      shuffled = shuffled.map((p, idx) => ({
+        ...p,
+        currentIdx: idx,
+      }));
+
+      setPieces(shuffled);
+      setPhase('solve');
+      setTimer(0);
+      setMoves(0);
+      setIsTimerRunning(true);
+    };
+
+    img.src = imageSrc;
+  };
+
   const spawnFloatingReaction = useCallback((emoji?: string) => {
   if (phaseRef.current !== 'solve') return;
 
@@ -331,6 +539,47 @@ useEffect(() => {
   return () => clearInterval(interval);
 }, [phase, pieces.length, spawnFloatingReaction]);
 
+const calculatePerformanceScore = () => {
+  const timeScore = Math.max(0, 100 - timer);
+  const moveScore = Math.max(0, 100 - moves * 5);
+  const hintScore = Math.max(0, 100 - hintsUsed * 20);
+
+  return Math.round(
+    timeScore * 0.5 +
+    moveScore * 0.3 +
+    hintScore * 0.2
+  );
+};
+
+const getAdaptiveDifficulty = () => {
+  const performance = calculatePerformanceScore();
+
+  if (performance >= 80) {
+    return 'harder';
+  } else if (performance >= 50) {
+    return 'same';
+  } else {
+    return 'easier';
+  }
+};
+
+const getNextGridSize = () => {
+  const result = getAdaptiveDifficulty();
+  const currentGrid = difficulty.grid;
+
+  if (result === 'harder') {
+    return Math.min(currentGrid + 1, 5);
+  }
+
+  if (result === 'easier') {
+    return Math.max(currentGrid - 1, 2);
+  }
+
+  return currentGrid;
+};
+
+  
+
   const handleWin = () => {
   // Calculate score
   const difficultyMultiplier = SCORE_MULTIPLIERS[difficulty.id] || 1;
@@ -345,6 +594,79 @@ useEffect(() => {
 );
 
   setScore(finalScore);
+  setGameStats((prev) => [
+  ...prev,
+  {
+    score: finalScore,
+    time: timer,
+    moves: moves,
+    hints: hintsUsed,
+    difficulty: difficulty.id,
+    date: new Date().toISOString(),
+  },
+]);
+  const adaptiveResult = getAdaptiveDifficulty();
+  console.log('Adaptive difficulty:', adaptiveResult);
+  const nextGrid = getNextGridSize();
+  setNextGridSize(nextGrid);
+  console.log('Next grid size:', nextGrid);
+
+  const grid = difficulty.grid;
+const canvas = document.createElement('canvas');
+const firstPiece = pieces[0];
+
+if (firstPiece) {
+  const pieceImg = new Image();
+
+  pieceImg.onload = () => {
+    const pieceWidth = pieceImg.naturalWidth;
+    const pieceHeight = pieceImg.naturalHeight;
+
+    canvas.width = pieceWidth * grid;
+    canvas.height = pieceHeight * grid;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const imagePromises = pieces.map((piece) => {
+  return new Promise<void>((resolve, reject) => {
+    const img = new Image();
+
+    img.onload = () => {
+      const row = Math.floor(piece.originalIdx / grid);
+      const col = piece.originalIdx % grid;
+
+      ctx.drawImage(
+        img,
+        col * pieceWidth,
+        row * pieceHeight,
+        pieceWidth,
+        pieceHeight
+      );
+
+      resolve();
+    };
+
+    img.onerror = () => {
+      reject(new Error(`Failed to load puzzle piece ${piece.originalIdx}`));
+    };
+
+    img.src = piece.imgUrl;
+  });
+});
+
+Promise.all(imagePromises)
+  .then(() => {
+    setCompletedImage(canvas.toDataURL('image/jpeg', 0.9));
+  })
+  .catch((error) => {
+    console.error('Failed to reconstruct completed puzzle:', error);
+  });
+
+};
+
+  pieceImg.src = firstPiece.imgUrl;
+}
 
 setIsTimerRunning(false);
 setMascotEmoji('🎉');
@@ -659,6 +981,7 @@ if (hoveredSlotIdx !== null) {
           
           if (targetPiece && targetPiece.id !== curDragged.id) {
   setPieces(prev => {
+    saveToUndo(prev);
     const newArr = prev.map(p => ({ ...p }));
     const i1 = newArr.findIndex(p => p.id === curDragged.id);
     const i2 = newArr.findIndex(p => p.id === targetPiece.id);
@@ -1017,6 +1340,115 @@ if (hoveredSlotIdx !== null) {
     );
   };
 
+  const renderSourceSelection = () => (
+  <div className="flex flex-col items-center justify-center h-full space-y-10 animate-fade-in z-10 relative">
+    <div className="text-center space-y-3">
+      <h2 className="text-4xl font-black text-white tracking-tight">
+        CHOOSE PUZZLE SOURCE
+      </h2>
+
+      <p className="text-zinc-400 tracking-widest text-sm">
+        HOW DO YOU WANT TO CREATE YOUR PUZZLE?
+      </p>
+    </div>
+
+    <div className="flex gap-6">
+      <button
+       onClick={() => {
+    setPhase('capture');
+    playClickSound();
+  }}
+        className="group relative px-8 py-6 bg-zinc-900 border border-zinc-800 rounded-2xl hover:border-[#D7FF2F]/50 transition-colors"
+      >
+        <div className="text-4xl mb-3">📷</div>
+        <div className="text-white font-semibold">CAMERA PUZZLE</div>
+        <div className="text-xs text-zinc-500 mt-1">
+          Capture a puzzle with your camera
+        </div>
+      </button>
+
+      <button
+        onClick={() => {
+          setPhase('images');
+          playClickSound();
+        }}
+        className="group relative px-8 py-6 bg-zinc-900 border border-zinc-800 rounded-2xl hover:border-[#D7FF2F]/50 transition-colors"
+      >
+        <div className="text-4xl mb-3">🖼️</div>
+        <div className="text-white font-semibold">CHOOSE IMAGE</div>
+        <div className="text-xs text-zinc-500 mt-1">
+          Use a built-in puzzle image
+        </div>
+      </button>
+    </div>
+
+    <button
+      onClick={() => {
+        setPhase('menu');
+        playClickSound();
+      }}
+      className="text-zinc-500 hover:text-white text-sm transition-colors"
+    >
+      ← Back to Menu
+    </button>
+  </div>
+);
+
+
+  const renderImageSelection = () => (
+  <div className="flex flex-col items-center justify-center h-full space-y-10 animate-fade-in z-10 relative">
+    <div className="text-center space-y-3">
+      <h2 className="text-4xl font-black text-white tracking-tight">
+        CHOOSE AN IMAGE
+      </h2>
+
+      <p className="text-zinc-400 tracking-widest text-sm">
+        SELECT A PUZZLE TO PLAY
+      </p>
+    </div>
+
+    <div className="grid grid-cols-2 gap-6">
+      {PUZZLE_IMAGES.map((image) => (
+        <button
+          key={image.name}
+          onClick={() => {
+            setSelectedPuzzleImage(image.src);
+            generatePuzzleFromImage(image.src);
+            playClickSound();
+          }}
+          className="group w-56 h-40 bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden hover:border-[#D7FF2F]/50 transition-all"
+        >
+          <div className="w-full h-28 overflow-hidden">
+            <img
+              src={image.src}
+              alt={image.name}
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+            />
+          </div>
+
+          <div className="flex items-center justify-center gap-2 h-12">
+            <span>{image.emoji}</span>
+            <span className="text-white font-semibold">
+              {image.name}
+            </span>
+          </div>
+        </button>
+      ))}
+    </div>
+
+    <button
+      onClick={() => {
+        setPhase('source');
+        setNextGridSize(null);
+        playClickSound();
+      }}
+      className="text-zinc-500 hover:text-white text-sm transition-colors"
+    >
+      ← Back
+    </button>
+  </div>
+);
+
   const renderMenu = () => (
     <div className="flex flex-col items-center justify-center h-full space-y-12 animate-fade-in z-10 relative">
       <div className="text-center space-y-4">
@@ -1044,7 +1476,7 @@ if (hoveredSlotIdx !== null) {
 
       <div className="flex gap-6">
         <button 
-          onClick={() => { setPhase('capture'); playClickSound(); }}
+          onClick={() => { setPhase('source'); playClickSound(); }}
           className="group relative px-8 py-4 bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden hover:border-[#D7FF2F]/50 transition-colors"
         >
           <div className="absolute inset-0 bg-[#D7FF2F]/10 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-out" />
@@ -1061,9 +1493,252 @@ if (hoveredSlotIdx !== null) {
           <List size={20} className="text-zinc-400" />
           LEADERBOARD
         </button>
+
+        <button 
+  onClick={() => { setPhase('statistics'); playClickSound(); }}
+  className="flex items-center gap-3 px-8 py-4 bg-zinc-900 border border-zinc-800 rounded-2xl text-white font-semibold hover:bg-zinc-800 transition-colors"
+>
+  📊 STATISTICS
+</button>
+
       </div>
     </div>
   );
+
+  const renderStatistics = () => (
+  <div className="flex flex-col items-center justify-center h-full w-full max-w-5xl mx-auto p-6 animate-fade-in z-10 relative">
+    <div className="bg-[#111] border border-zinc-800 rounded-3xl w-full p-8 shadow-2xl">
+
+      <div className="flex items-center gap-3 mb-8">
+        <span className="text-3xl">📊</span>
+        <h2 className="text-3xl font-black tracking-widest text-white">
+          STATISTICS
+        </h2>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+
+        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5">
+          <div className="text-2xl mb-2">🧩</div>
+          <div className="text-zinc-500 text-xs font-bold uppercase">
+            Games Completed
+          </div>
+          <div className="text-3xl font-black text-white mt-2">
+            {gameStats.length}
+          </div>
+        </div>
+
+        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5">
+          <div className="text-2xl mb-2">🏆</div>
+          <div className="text-zinc-500 text-xs font-bold uppercase">
+            Best Score
+          </div>
+          <div className="text-3xl font-black text-[#D7FF2F] mt-2">
+            {gameStats.length
+              ? Math.max(...gameStats.map((game) => game.score))
+              : 0}
+          </div>
+        </div>
+
+        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5">
+          <div className="text-2xl mb-2">⚡</div>
+          <div className="text-zinc-500 text-xs font-bold uppercase">
+            Best Time
+          </div>
+          <div className="text-3xl font-black text-white mt-2">
+            {gameStats.length
+              ? formatTime(Math.min(...gameStats.map((game) => game.time)))
+              : '00:00'}
+          </div>
+        </div>
+
+        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5">
+          <div className="text-2xl mb-2">🔄</div>
+          <div className="text-zinc-500 text-xs font-bold uppercase">
+            Avg Moves
+          </div>
+          <div className="text-3xl font-black text-white mt-2">
+            {gameStats.length
+              ? Math.round(
+                  gameStats.reduce((sum, game) => sum + game.moves, 0) /
+                    gameStats.length
+                )
+              : 0}
+          </div>
+        </div>
+
+      </div>
+
+            <div className="mt-8">
+        <h3 className="text-xl font-black tracking-widest text-white mb-4">
+          🎯 DIFFICULTY BREAKDOWN
+        </h3>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {['Easy', 'Medium', 'Hard'].map((level) => {
+            const difficultyGames = gameStats.filter(
+              (game) => game.difficulty.toLowerCase() === level.toLowerCase()
+            );
+
+            const bestScore = difficultyGames.length
+              ? Math.max(...difficultyGames.map((game) => game.score))
+              : 0;
+
+            const avgMoves = difficultyGames.length
+              ? Math.round(
+                  difficultyGames.reduce(
+                    (sum, game) => sum + game.moves,
+                    0
+                  ) / difficultyGames.length
+                )
+              : 0;
+
+            return (
+              <div
+                key={level}
+                className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5"
+              >
+                <div className="text-lg font-black text-white mb-3">
+                  {level === 'Easy' && '🟢'}
+                  {level === 'Medium' && '🟡'}
+                  {level === 'Hard' && '🔴'} {level}
+                </div>
+
+                <div className="text-zinc-500 text-xs font-bold uppercase">
+                  Games Played
+                </div>
+                <div className="text-2xl font-black text-white mb-3">
+                  {difficultyGames.length}
+                </div>
+
+                <div className="text-zinc-500 text-xs font-bold uppercase">
+                  Best Score
+                </div>
+                <div className="text-xl font-black text-[#D7FF2F] mb-3">
+                  {bestScore}
+                </div>
+
+                <div className="text-zinc-500 text-xs font-bold uppercase">
+                  Avg Moves
+                </div>
+                <div className="text-xl font-black text-white">
+                  {avgMoves}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+            <div className="mt-8">
+        <h3 className="text-xl font-black tracking-widest text-white mb-4">
+          📈 PERFORMANCE
+        </h3>
+
+        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5">
+          <div className="flex items-end gap-3 h-48">
+            {gameStats.length > 0 ? (
+              gameStats.map((game, index) => {
+                const maxScore = Math.max(
+                  ...gameStats.map((item) => item.score),
+                  1
+                );
+
+                const height = Math.max(
+                  (game.score / maxScore) * 100,
+                  5
+                );
+
+                return (
+                  <div
+                    key={`${game.date}-${index}`}
+                    className="flex-1 h-full flex flex-col justify-end items-center gap-2"
+                  >
+                    <span className="text-xs text-zinc-400 font-bold">
+                      {game.score}
+                    </span>
+
+                    <div
+                      className="w-full max-w-10 bg-[#D7FF2F] rounded-t-lg transition-all"
+                      style={{ height: `${height}%` }}
+                    />
+
+                    <span className="text-xs text-zinc-500">
+                      #{index + 1}
+                    </span>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-zinc-600 font-bold">
+                Complete a puzzle to see your performance
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+
+      {/* RECENT GAMES */}
+      <div className="mt-8">
+        <h3 className="text-xl font-black tracking-widest text-white mb-4">
+          🕒 RECENT GAMES
+        </h3>
+
+        <div className="space-y-3">
+          {gameStats.length > 0 ? (
+            gameStats
+              .slice(-5)
+              .reverse()
+              .map((game, index) => (
+                <div
+                  key={`${game.date}-${index}`}
+                  className="flex items-center justify-between bg-zinc-900 border border-zinc-800 rounded-xl p-4"
+                >
+                  <div>
+                    <div className="text-white font-bold">
+                      Game #{gameStats.length - index}
+                    </div>
+
+                    <div className="text-zinc-500 text-xs mt-1">
+                      {game.difficulty}
+                    </div>
+                  </div>
+
+                  <div className="text-right">
+                    <div className="text-[#D7FF2F] font-black">
+                      {game.score}
+                    </div>
+
+                    <div className="text-zinc-500 text-xs">
+                      {game.moves} moves
+                    </div>
+                  </div>
+                </div>
+              ))
+          ) : (
+            <div className="text-center text-zinc-600 font-bold py-6">
+              No games completed yet
+            </div>
+          )}
+        </div>
+      </div>
+
+     
+
+      <button
+        onClick={() => {
+          setPhase('menu');
+          playClickSound();
+        }}
+        className="mt-8 px-8 py-3 rounded-xl border border-zinc-700 bg-zinc-900 text-white font-bold hover:bg-zinc-800 transition"
+      >
+        ← BACK TO MENU
+      </button>
+
+    </div>
+  </div>
+);
 
   const renderLeaderboard = () => (
     <div className="flex flex-col items-center justify-center h-full w-full max-w-3xl mx-auto p-6 animate-fade-in z-10 relative">
@@ -1183,7 +1858,10 @@ if (hoveredSlotIdx !== null) {
 
       {/* Main Content Router */}
       {phase === 'menu' && renderMenu()}
+      {phase === 'source' && renderSourceSelection()}
+      {phase === 'images' && renderImageSelection()}
       {phase === 'leaderboard' && renderLeaderboard()}
+      {phase === 'statistics' && renderStatistics()}
 
       {/* Game Phases Container (Capture / Solve) */}
       <div className={`absolute inset-0 z-10 flex flex-col items-center justify-center transition-opacity duration-500 ${phase === 'capture' || phase === 'solve' ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
@@ -1197,6 +1875,41 @@ if (hoveredSlotIdx !== null) {
              >
                 <RotateCcw size={20} />
              </button>
+
+             <button
+  onClick={() => {
+    const next = !musicEnabled;
+    setMusicEnabled(next);
+
+    if (musicRef.current) {
+      if (next) {
+        musicRef.current.play().catch((err) => {
+          console.log('Music play error:', err);
+        });
+      } else {
+        musicRef.current.pause();
+      }
+    }
+  }}
+  className="ml-2 px-3 py-2 rounded-lg border border-zinc-700 bg-[#111]/80 hover:bg-zinc-800 transition"
+>
+  {musicEnabled ? '🔊 Music ON' : '🔇 Music OFF'}
+</button>
+
+<button
+  onClick={handleUndo}
+  className="ml-2 px-3 py-2 rounded-lg border border-zinc-700 bg-[#111]/80 hover:bg-zinc-800 transition"
+>
+  ↩️ Undo
+</button>
+
+<button
+  onClick={handleRedo}
+  className="ml-2 px-3 py-2 rounded-lg border border-zinc-700 bg-[#111]/80 hover:bg-zinc-800 transition"
+>
+  ↪️ Redo
+</button>
+
            </div>
 
            {phase === 'solve' && (
@@ -1470,6 +2183,21 @@ if (hoveredSlotIdx !== null) {
   </span>
 </div>
               </div>
+
+              {completedImage && (
+  <button
+    type="button"
+    onClick={() => {
+      const link = document.createElement('a');
+      link.href = completedImage;
+      link.download = 'neon-snap-puzzle.jpg';
+      link.click();
+    }}
+    className="w-full mb-4 py-3 rounded-xl border border-[#D7FF2F]/40 text-[#D7FF2F] font-black uppercase tracking-[0.2em] text-xs hover:bg-[#D7FF2F]/10 transition-all"
+  >
+    📥 DOWNLOAD PUZZLE
+  </button>
+)}
 
               {/* Form submit */}
               <form onSubmit={handleVictorySubmit} className="flex flex-col gap-4">
