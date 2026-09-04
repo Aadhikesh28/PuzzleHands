@@ -7,7 +7,7 @@ import { Award, Zap, Clock, ShieldAlert, Play, Pause, RotateCcw, X, Volume2, Fil
 
 export const Leaderboard: React.FC = () => {
   const { leaderboard, resetGame } = useGameStore();
-  const [filter, setFilter] = useState<Difficulty | 'all'>('all');
+  const [filter, setFilter] = useState<'all' | 'easy' | 'insane'>('all');
   const [activeReplay, setActiveReplay] = useState<LeaderboardEntry | null>(null);
 
   const filteredEntries = leaderboard
@@ -132,7 +132,7 @@ export const Leaderboard: React.FC = () => {
                   <div className="col-span-2 text-center text-xs">
                     <span className={`px-2 py-0.5 rounded text-[9px] font-bold border uppercase ${
                       entry.difficulty === 'easy' ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' :
-                      entry.difficulty === 'insane' ? 'bg-red-500/10 border-red-500/30 text-red-400' :
+                      entry.difficulty === 'hard' ? 'bg-red-500/10 border-red-500/30 text-red-400' :
                       'bg-zinc-500/10 border-zinc-500/30 text-zinc-400'
                     }`}>
                       {entry.difficulty}
