@@ -7,7 +7,7 @@ import { Award, Zap, Clock, ShieldAlert, Play, Pause, RotateCcw, X, Volume2, Fil
 
 export const Leaderboard: React.FC = () => {
   const { leaderboard, resetGame } = useGameStore();
-  const [filter, setFilter] = useState<'all' | 'easy' | 'insane'>('all');
+  const [filter, setFilter] = useState<'all' | 'easy' | 'moderate' | 'hard'>('all');
   const [activeReplay, setActiveReplay] = useState<LeaderboardEntry | null>(null);
 
   const filteredEntries = leaderboard
@@ -38,7 +38,7 @@ export const Leaderboard: React.FC = () => {
 
       {/* Difficulty Filter Tabs */}
       <div className="flex flex-wrap gap-2 justify-center mb-6 w-full max-w-2xl bg-white/5 p-1.5 rounded-full border border-white/10">
-        {(['all', 'easy', 'insane'] as const).map((diff) => (
+        {(['all', 'easy', 'moderate', 'hard'] as const).map((diff) => (
           <button
             key={diff}
             onClick={() => {

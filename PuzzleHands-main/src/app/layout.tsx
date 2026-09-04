@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "CYBER_PUZZLE.AI",
+  title: "PuzzleVision AI",
   description: "AI-Powered Hand Gesture Puzzle Game",
 };
 

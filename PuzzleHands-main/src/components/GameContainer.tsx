@@ -707,7 +707,7 @@ export const GameContainer: React.FC = () => {
           key={diff}
           onClick={() => {
             playClickSound();
-            setDifficulty(diff);
+            setDifficulty(diff as Difficulty);
           }}
           className={`flex flex-col items-center justify-center py-3.5 px-2 rounded-xl border transition-all ${
             active
@@ -947,7 +947,7 @@ export const GameContainer: React.FC = () => {
                       {score}
                     </span>
                     <span className="text-xs text-gray-500 font-bold">
-                      x{{ easy: 1, moderate: 2, hard: 3 }[difficulty]}
+                      x{{ easy: 1, moderate: 2, hard: 3, insane: 4 }[difficulty]}
                     </span>
                   </div>
                 </div>
